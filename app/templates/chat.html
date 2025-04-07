@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agents_Q - Chat Interface</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Agents_Q</h1>
+            <p>Chat with an AI agent powered by OpenAI Agents SDK</p>
+            <nav>
+                <a href="{{ url_for('main.index') }}">Workflow</a>
+                <a href="{{ url_for('main.chat') }}" class="active">Simple Chat</a>
+            </nav>
+        </header>
+        
+        <div class="chat-container">
+            <div id="chat-messages" class="chat-messages">
+                <div class="message system">
+                    <div class="message-content">
+                        Hello! I'm your AI assistant. I can help you with various tasks using tools like web search, file search, and more. What would you like me to do?
+                    </div>
+                </div>
+            </div>
+            
+            <div class="chat-input">
+                <form id="chat-form">
+                    <input type="text" id="user-input" placeholder="Type your message here..." autocomplete="off">
+                    <button type="submit">Send</button>
+                </form>
+            </div>
+        </div>
+        
+        <div id="status" class="status">
+            <div class="status-indicator"></div>
+            <span>Ready</span>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,43 @@
+.feedback-form {
+    background-color: var(--chat-bg);
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.feedback-form h2 {
+    color: var(--primary-color);
+    margin-bottom: 10px;
+}
+
+.feedback-form p {
+    margin-bottom: 15px;
+    color: var(--secondary-color);
+}
+
+.feedback-form form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.plan-analysis {
+    background-color: var(--chat-bg);
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.plan-analysis h2 {
+    color: var(--primary-color);
+    margin-bottom: 15px;
+}
+
+.analysis-content {
+    padding: 15px;
+    background-color: var(--agent-message-bg);
+    border-radius: 8px;
+    white-space: pre-line;
+}

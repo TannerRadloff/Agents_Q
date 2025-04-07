@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 import os
 from app.agents_core import AgentsQCore
+from app.workflow import get_workflow_state
 
 agent_bp = Blueprint('agent', __name__)
 agents_core = AgentsQCore()
@@ -36,3 +37,20 @@ def chat():
             'error': result['error'],
             'response': result['response']
         }), 500
+
+@agent_bp.route('/workflow/<session_id>', methods=['GET'])
+def get_workflow(session_id):
+    """Get the current state of a workflow."""
+    workflow = get_workflow_state(session_id)
+    
+    if not workflow:
+        return jsonify({'error': 'Workflow not found'}), 404
+    
+    return jsonify({
+        'session_id': workflow.session_id,
+        'status': workflow.status,
+        'current_step': workflow.current_step_index,
+        'total_steps': workflow.total_steps,
+        'updates': workflow.updates,
+        'final_result': workflow.final_result
+    })

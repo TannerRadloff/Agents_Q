@@ -3,30 +3,70 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Agents_Q - AI Agent Chat</title>
+    <title>Agents_Q - Workflow System</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/additional-styles.css') }}">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>Agents_Q</h1>
-            <p>Chat with an AI agent powered by OpenAI Agents SDK</p>
+            <h1>Agents_Q Workflow System</h1>
+            <p>Create and execute workflows with AI agents</p>
+            <nav>
+                <a href="{{ url_for('main.index') }}" class="active">Workflow</a>
+                <a href="{{ url_for('main.chat') }}">Simple Chat</a>
+            </nav>
         </header>
         
-        <div class="chat-container">
-            <div id="chat-messages" class="chat-messages">
-                <div class="message system">
-                    <div class="message-content">
-                        Hello! I'm your AI assistant. I can help you with various tasks using tools like web search, file search, and more. What would you like me to do?
-                    </div>
+        <div class="workflow-container">
+            <div class="workflow-input">
+                <h2>Create a Workflow</h2>
+                <p>Describe your task in detail and the system will create a plan to accomplish it.</p>
+                <form id="workflow-form">
+                    <input type="hidden" id="session-id" value="{{ session_id }}">
+                    <textarea id="user-input" placeholder="Describe your task here..." rows="4"></textarea>
+                    <button type="submit" id="create-plan-btn">Create Plan</button>
+                </form>
+            </div>
+            
+            <div id="plan-display" class="plan-display hidden">
+                <h2>Proposed Plan</h2>
+                <div id="plan-summary" class="plan-summary"></div>
+                <div id="plan-steps" class="plan-steps"></div>
+                <div class="plan-actions">
+                    <button id="accept-plan-btn">Accept Plan</button>
+                    <button id="revise-plan-btn">Revise Plan</button>
+                    <button id="analyze-plan-btn">Analyze Plan</button>
                 </div>
             </div>
             
-            <div class="chat-input">
-                <form id="chat-form">
-                    <input type="text" id="user-input" placeholder="Type your message here..." autocomplete="off">
-                    <button type="submit">Send</button>
+            <div id="feedback-form" class="feedback-form hidden">
+                <h2>Provide Feedback</h2>
+                <p>How would you like to improve the plan?</p>
+                <form>
+                    <textarea id="feedback-input" placeholder="Enter your feedback here..." rows="3"></textarea>
+                    <button type="submit" id="submit-feedback-btn">Submit Feedback</button>
                 </form>
+            </div>
+            
+            <div id="plan-analysis" class="plan-analysis hidden">
+                <h2>Plan Analysis</h2>
+                <div id="analysis-content" class="analysis-content"></div>
+            </div>
+            
+            <div id="workflow-progress" class="workflow-progress hidden">
+                <h2>Workflow Execution</h2>
+                <div class="progress-bar-container">
+                    <div id="progress-bar" class="progress-bar"></div>
+                </div>
+                <div id="current-step" class="current-step"></div>
+                <div id="progress-updates" class="progress-updates"></div>
+            </div>
+            
+            <div id="workflow-result" class="workflow-result hidden">
+                <h2>Workflow Result</h2>
+                <div id="result-content" class="result-content"></div>
             </div>
         </div>
         
@@ -36,6 +76,6 @@
         </div>
     </div>
 
-    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/workflow.js') }}"></script>
 </body>
 </html>
