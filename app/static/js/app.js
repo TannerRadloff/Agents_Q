@@ -4,6 +4,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const chatForm = document.getElementById('chat-form');
     const userInput = document.getElementById('user-input');
     const chatMessages = document.getElementById('chat-messages');
+    const modelSelector = document.getElementById('model-selector');
     const statusIndicator = document.querySelector('.status-indicator');
     const statusText = document.querySelector('.status span');
 
@@ -54,12 +55,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Function to send message to backend
     function sendMessage(message) {
+        const selectedModel = modelSelector.value;
+
         fetch('/api/chat', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ message: message })
+            body: JSON.stringify({ 
+                message: message, 
+                model: selectedModel 
+            })
         })
         .then(response => {
             if (!response.ok) {

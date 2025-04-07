@@ -2,12 +2,13 @@ from flask import Blueprint, request, jsonify
 import os
 from app.agents_core import AgentsQCore
 from app.workflow import get_workflow_state
+import asyncio
 
 agent_bp = Blueprint('agent', __name__)
 agents_core = AgentsQCore()
 
 @agent_bp.route('/chat', methods=['POST'])
-def chat():
+async def chat():
     """Handle chat requests to the agent."""
     data = request.json
     user_message = data.get('message', '')
@@ -18,8 +19,8 @@ def chat():
     if not user_message:
         return jsonify({'error': 'No message provided'}), 400
     
-    # Process the message using the AgentsQCore
-    result = agents_core.process_message_sync(
+    # Process the message using the AgentsQCore asynchronously
+    result = await agents_core.process_message(
         message=user_message,
         custom_instructions=custom_instructions,
         tools=tools,

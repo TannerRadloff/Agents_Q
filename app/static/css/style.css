@@ -133,9 +133,36 @@ nav a.active {
     border-top: 1px solid var(--border-color);
 }
 
+/* Style for the model selector container */
+.model-selector-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px; /* Add space below the selector */
+}
+
+.model-selector-container label {
+    font-size: 14px;
+    color: var(--secondary-color);
+}
+
+#model-selector {
+    padding: 5px 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 14px;
+    background-color: #fff;
+}
+
 #chat-form {
     display: flex;
-    gap: 10px;
+    flex-direction: column; /* Stack selector and input vertically */
+}
+
+/* Adjust the input row within the form */
+.input-row { 
+    display: flex; 
+    gap: 10px; 
 }
 
 /* Workflow Interface Styles */

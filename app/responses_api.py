@@ -1,4 +1,5 @@
 from agents import OpenAIResponsesModel
+from openai import OpenAI
 from typing import Dict, Any, Optional, List
 import logging
 
@@ -16,6 +17,7 @@ class ResponsesAPIManager:
             api_key: OpenAI API key for authentication.
         """
         self.api_key = api_key
+        self.openai_client = OpenAI(api_key=self.api_key)
         logger.info("ResponsesAPIManager initialized")
     
     def create_responses_model(self, model_name: str = "o3-mini") -> OpenAIResponsesModel:
@@ -28,7 +30,7 @@ class ResponsesAPIManager:
             An initialized OpenAIResponsesModel object.
         """
         try:
-            model = OpenAIResponsesModel(model=model_name)
+            model = OpenAIResponsesModel(model=model_name, openai_client=self.openai_client)
             logger.info(f"Created OpenAIResponsesModel with model: {model_name}")
             return model
         except Exception as e:
@@ -36,12 +38,14 @@ class ResponsesAPIManager:
             raise
     
     def configure_model_settings(self, 
+                                model_name: str,
                                 temperature: float = 0.7, 
                                 top_p: float = 0.9,
                                 tool_choice: str = "auto") -> Dict[str, Any]:
         """Configure model settings for the Responses API.
         
         Args:
+            model_name: Name of the OpenAI model being used.
             temperature: Controls randomness in the model's output.
             top_p: Controls diversity via nucleus sampling.
             tool_choice: How the model chooses to call tools.
@@ -50,11 +54,15 @@ class ResponsesAPIManager:
             Dictionary of model settings.
         """
         settings = {
-            "temperature": temperature,
-            "top_p": top_p,
             "tool_choice": tool_choice
         }
-        logger.info(f"Configured model settings: {settings}")
+        
+        # Only include temperature and top_p if not using o3-mini
+        if model_name != "o3-mini":
+            settings["temperature"] = temperature
+            settings["top_p"] = top_p
+
+        logger.info(f"Configured model settings for {model_name}: {settings}")
         return settings
     
     def handle_streaming_response(self, stream_handler: Optional[callable] = None) -> callable:
