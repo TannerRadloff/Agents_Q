@@ -36,7 +36,7 @@
 - [x] Fix any identified issues
 
 ## Deployment
-- [ ] Prepare for deployment
-- [ ] Push final code to GitHub
-- [ ] Create documentation
-- [ ] Add usage instructions
+- [x] Prepare for deployment
+- [x] Push final code to GitHub
+- [x] Create documentation
+- [x] Add usage instructions
