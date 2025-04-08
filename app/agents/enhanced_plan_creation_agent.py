@@ -1,7 +1,8 @@
-from agents import Agent, ModelSettings, OpenAIResponsesModel
+from agents import Agent, ModelSettings, OpenAIResponsesModel, Runner
 from app.models import PlanOutput, Step
 from typing import List, Dict, Any
 import logging
+from pydantic import BaseModel
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -36,14 +37,12 @@ class EnhancedPlanCreationAgent:
             model=model_name,
             output_type=PlanOutput,
             model_settings=ModelSettings(
-                temperature=temperature,
-                top_p=0.9,
                 tool_choice="none"  # No tool usage for plan creation
             ),
         )
         logger.info(f"Enhanced Plan Creation Agent initialized with model: {model_name}")
     
-    def refine_plan(self, plan: PlanOutput, feedback: str) -> PlanOutput:
+    async def refine_plan(self, plan: PlanOutput, feedback: str) -> PlanOutput:
         """Refine an existing plan based on user feedback.
         
         Args:
@@ -76,9 +75,11 @@ class EnhancedPlanCreationAgent:
         )
         
         # Use an empty string as input since all context is in the instructions
-        return refinement_agent.run_sync("")
+        # Use Runner.run to execute the refinement agent
+        result = await Runner.run(refinement_agent, "")
+        return result.final_output_as(PlanOutput)
     
-    def create_plan_with_examples(self, user_input: str, examples: List[Dict[str, Any]] = None) -> PlanOutput:
+    async def create_plan_with_examples(self, user_input: str, examples: List[Dict[str, Any]] = None) -> PlanOutput:
         """Create a plan with example plans as reference.
         
         Args:
@@ -89,8 +90,9 @@ class EnhancedPlanCreationAgent:
             Generated plan
         """
         if not examples:
-            # Default to regular plan creation if no examples provided
-            return self.agent.run_sync(user_input)
+            # Use Runner.run to execute the main agent
+            result = await Runner.run(self.agent, user_input)
+            return result.final_output_as(PlanOutput)
         
         # Format examples as string
         examples_str = "Example Plans:\n\n"
@@ -122,9 +124,11 @@ class EnhancedPlanCreationAgent:
             model_settings=self.agent.model_settings,
         )
         
-        return examples_agent.run_sync(user_input)
+        # Use Runner.run to execute the examples agent
+        result = await Runner.run(examples_agent, user_input)
+        return result.final_output_as(PlanOutput)
     
-    def analyze_plan_quality(self, plan: PlanOutput) -> Dict[str, Any]:
+    async def analyze_plan_quality(self, plan: PlanOutput) -> Dict[str, Any]:
         """Analyze the quality of a plan and provide feedback.
         
         Args:
@@ -156,11 +160,12 @@ class EnhancedPlanCreationAgent:
             model=self.agent.model,
         )
         
-        # Get the analysis
-        analysis_result = analysis_agent.run_sync(plan_str)
+        # Get the analysis using Runner.run
+        analysis_result = await Runner.run(analysis_agent, plan_str)
         
-        # Parse the analysis result (this is a simple approach, could be more structured)
+        # Parse the analysis result
         return {
-            'analysis': analysis_result,
+            # Assuming the analysis agent returns the analysis as its final_output
+            'analysis': analysis_result.final_output, 
             'plan': plan
         }

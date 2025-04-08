@@ -20,23 +20,6 @@ class ResponsesAPIManager:
         self.openai_client = OpenAI(api_key=self.api_key)
         logger.info("ResponsesAPIManager initialized")
     
-    def create_responses_model(self, model_name: str = "o3-mini") -> OpenAIResponsesModel:
-        """Create an OpenAIResponsesModel instance.
-        
-        Args:
-            model_name: Name of the OpenAI model to use.
-            
-        Returns:
-            An initialized OpenAIResponsesModel object.
-        """
-        try:
-            model = OpenAIResponsesModel(model=model_name, openai_client=self.openai_client)
-            logger.info(f"Created OpenAIResponsesModel with model: {model_name}")
-            return model
-        except Exception as e:
-            logger.error(f"Error creating OpenAIResponsesModel: {str(e)}")
-            raise
-    
     def configure_model_settings(self, 
                                 model_name: str,
                                 temperature: float = 0.7, 

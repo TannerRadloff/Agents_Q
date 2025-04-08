@@ -28,6 +28,11 @@
             
             <div class="chat-input">
                 <form id="chat-form">
+                    <select id="model-selector" name="model">
+                        <option value="gpt-4o">GPT-4o</option>
+                        <option value="o3-mini" selected>O3-Mini</option>
+                        <!-- Add other models as needed -->
+                    </select>
                     <input type="text" id="user-input" placeholder="Type your message here..." autocomplete="off">
                     <button type="submit">Send</button>
                 </form>

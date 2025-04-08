@@ -1,16 +1,30 @@
-from agents import Agent, ModelSettings, function_tool
+from agents import Agent, ModelSettings, function_tool, Runner, WebSearchTool
 from app.models import Step
 from typing import Dict, Any, List, Optional
 import logging
+from pydantic import BaseModel
+import asyncio
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+# Define Pydantic model for report sections
+class ReportSection(BaseModel):
+    heading: str
+    content: str
+
+# Define Pydantic model for text analysis output
+class TextAnalysisOutput(BaseModel):
+    sentiment: str
+    key_phrases: List[str]
+    summary: str
+    word_count: int
+
 class EnhancedWorkflowExecutionAgent:
     """Enhanced workflow execution agent with improved capabilities."""
     
-    def __init__(self, model_name: str = "o3-mini", temperature: float = 0.7):
+    def __init__(self, model_name: str = "gpt-4o", temperature: float = 0.7):
         """Initialize the enhanced workflow execution agent.
         
         Args:
@@ -54,35 +68,7 @@ class EnhancedWorkflowExecutionAgent:
         tools = {}
         
         # Web search tool
-        from agents import WebSearchTool
         tools['web_search'] = WebSearchTool()
-        
-        # Mock FileSearchTool
-        class MockFileSearchTool:
-            def __init__(self, max_num_results=3, vector_store_ids=None):
-                self.max_num_results = max_num_results
-                self.vector_store_ids = vector_store_ids or ["mock_store_id"]
-                self.name = "file_search"
-                self.description = "Search through files for relevant information"
-            
-            def __call__(self, query: str) -> str:
-                logger.info(f"Mock file search for: {query}")
-                return f"Found information related to '{query}' in files (mock implementation)"
-        
-        tools['file_search'] = MockFileSearchTool(max_num_results=3, vector_store_ids=["mock_store_id"])
-        
-        # Mock ComputerTool
-        class MockComputerTool:
-            def __init__(self, computer=None):
-                self.computer = computer or "mock_computer"
-                self.name = "computer"
-                self.description = "Perform operations on the computer"
-            
-            def __call__(self, command: str) -> str:
-                logger.info(f"Mock computer command: {command}")
-                return f"Executed command '{command}' on computer (mock implementation)"
-        
-        tools['computer'] = MockComputerTool(computer="mock_computer")
         
         # Custom function tools
         @function_tool
@@ -101,7 +87,7 @@ class EnhancedWorkflowExecutionAgent:
         tools['calculate_sum'] = calculate_sum
         
         @function_tool
-        def format_data(data: str, format_type: str = "json") -> str:
+        def format_data(data: str, format_type: str) -> str:
             """Format data into the specified format.
             
             Args:
@@ -111,47 +97,78 @@ class EnhancedWorkflowExecutionAgent:
             Returns:
                 Formatted data as a string
             """
-            if format_type.lower() == "json":
+            # Handle case where format_type might not be provided by LLM, default internally
+            effective_format_type = format_type.lower() if format_type else "json"
+
+            if effective_format_type == "json":
                 return f"{{\"data\": \"{data}\"}}"
-            elif format_type.lower() == "xml":
+            elif effective_format_type == "xml":
                 return f"<data>{data}</data>"
-            elif format_type.lower() == "yaml":
+            elif effective_format_type == "yaml":
                 return f"data: {data}"
             else:
+                # Fallback if an unknown format is requested
                 return data
         
         tools['format_data'] = format_data
         
         @function_tool
-        def analyze_text(text: str) -> Dict[str, Any]:
-            """Analyze text and extract key information.
+        async def analyze_text(text: str) -> Dict[str, Any]:
+            """Analyze text for sentiment, key phrases, and summary using an internal agent.
             
             Args:
                 text: The text to analyze
                 
             Returns:
-                Dictionary with analysis results
+                Dictionary with analysis results (sentiment, key_phrases, summary, word_count)
             """
-            # This would normally use NLP or other analysis methods
-            # For now, we'll return a mock analysis
-            word_count = len(text.split())
+            logger.info(f"Running internal analysis agent on text (length: {len(text)})...")
+            try:
+                # Use the same model as the parent agent for consistency, or choose a specific one
+                analyzer_model = self.agent.model 
+
+                # Create a dedicated agent for text analysis
+                analysis_agent = Agent(
+                    name="Text Analysis Agent",
+                    instructions=(
+                        "Analyze the following text. Determine the overall sentiment (positive, negative, neutral), "
+                        "extract the top 3-5 key phrases, provide a concise one-sentence summary, "
+                        "and count the total number of words. Output the results in the specified format."
+                    ),
+                    model=analyzer_model,
+                    output_type=TextAnalysisOutput, # Use the defined Pydantic model
+                    tools=[], # No tools needed for analysis
+                    model_settings=ModelSettings(tool_choice="none")
+                )
+
+                # Run the analysis agent (use await as this function is now async)
+                result = await Runner.run(analysis_agent, text)
+                
+                # Extract the structured output
+                analysis_output = result.final_output_as(TextAnalysisOutput)
+                logger.info("Internal analysis agent finished.")
+                # Return the Pydantic model as a dictionary
+                return analysis_output.dict()
             
-            return {
-                "word_count": word_count,
-                "sentiment": "positive" if "good" in text.lower() or "great" in text.lower() else "neutral",
-                "contains_question": "?" in text,
-                "key_phrases": text.split(".")[:2]  # First two sentences as key phrases
-            }
+            except Exception as e:
+                logger.error(f"Error in analyze_text tool: {e}", exc_info=True)
+                return {
+                    "error": "Failed to analyze text due to an internal error.",
+                    "sentiment": "unknown",
+                    "key_phrases": [],
+                    "summary": "Analysis failed.",
+                    "word_count": len(text.split()) # Provide basic word count even on failure
+                }
         
         tools['analyze_text'] = analyze_text
         
         @function_tool
-        def generate_report(title: str, sections: List[Dict[str, str]]) -> str:
+        def generate_report(title: str, sections: List[ReportSection]) -> str:
             """Generate a formatted report.
             
             Args:
                 title: Report title
-                sections: List of section dictionaries with 'heading' and 'content' keys
+                sections: List of section objects with 'heading' and 'content' attributes
                 
             Returns:
                 Formatted report as a string
@@ -159,9 +176,8 @@ class EnhancedWorkflowExecutionAgent:
             report = f"# {title}\n\n"
             
             for section in sections:
-                heading = section.get('heading', 'Untitled Section')
-                content = section.get('content', '')
-                report += f"## {heading}\n\n{content}\n\n"
+                # Access attributes directly from Pydantic model
+                report += f"## {section.heading}\n\n{section.content}\n\n"
             
             return report
         
@@ -169,66 +185,3 @@ class EnhancedWorkflowExecutionAgent:
         
         logger.info(f"Initialized {len(tools)} tools for the execution agent")
         return tools
-    
-    def execute_step(self, step: Step, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """Execute a single step in the workflow.
-        
-        Args:
-            step: The step to execute
-            context: Optional context from previous steps
-            
-        Returns:
-            Dictionary with execution results
-        """
-        # Prepare the input for the agent
-        input_text = step.description
-        
-        # Add context if provided
-        if context:
-            context_str = "\nContext from previous steps:\n"
-            for key, value in context.items():
-                context_str += f"- {key}: {value}\n"
-            input_text += context_str
-        
-        # Execute the step
-        logger.info(f"Executing step: {step.title}")
-        result = self.agent.run_sync(input_text)
-        
-        # Extract tools used
-        tools_used = []
-        for action in result.actions:
-            if hasattr(action, 'tool_name'):
-                tools_used.append(action.tool_name)
-        
-        # Return the results
-        return {
-            'step': step,
-            'result': result.final_output,
-            'tools_used': tools_used,
-            'success': True
-        }
-    
-    def execute_steps_with_dependencies(self, steps: List[Step]) -> List[Dict[str, Any]]:
-        """Execute a series of steps with dependency tracking.
-        
-        Args:
-            steps: List of steps to execute
-            
-        Returns:
-            List of execution results
-        """
-        results = []
-        context = {}
-        
-        for i, step in enumerate(steps):
-            logger.info(f"Executing step {i+1}/{len(steps)}: {step.title}")
-            
-            # Execute the step with context from previous steps
-            step_result = self.execute_step(step, context)
-            results.append(step_result)
-            
-            # Update context with this step's result
-            context[f"step_{i+1}_result"] = step_result['result']
-            context[f"step_{i+1}_title"] = step.title
-        
-        return results

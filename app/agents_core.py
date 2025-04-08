@@ -1,5 +1,6 @@
 from agents import Agent, Runner, WebSearchTool, FileSearchTool, ComputerTool, function_tool, ModelSettings
 from app.responses_api import ResponsesAPIManager
+from flask import current_app
 import os
 from typing import List, Dict, Any
 import asyncio
@@ -34,8 +35,8 @@ class AgentsQCore:
         custom_tools = {}
 
         @function_tool
-        def summarize_text(text: str) -> str:
-            """Summarize a piece of text.
+        async def summarize_text(text: str) -> str:
+            """Summarize a piece of text using an internal agent.
 
             Args:
                 text: The text to summarize.
@@ -43,15 +44,34 @@ class AgentsQCore:
             Returns:
                 A summary of the provided text.
             """
-            # This is a placeholder. The actual implementation will use the agent itself
-            # to generate a summary through a separate agent call.
-            return f"Summary of text: {text[:100]}..."
+            try:
+                # Use the default model from config for the summarizer agent
+                summarizer_model = current_app.config.get('DEFAULT_MODEL_NAME', 'gpt-4o')
+                
+                # Create a dedicated agent for summarization
+                summarizer_agent = Agent(
+                    name="Summarizer Agent",
+                    instructions="Summarize the following text concisely and accurately.",
+                    model=summarizer_model,
+                    tools=[], # No tools needed for summarization
+                    model_settings=ModelSettings(tool_choice="none")
+                )
+                
+                # Run the summarizer agent
+                logger.info(f"Running internal summarizer agent on text (length: {len(text)})...")
+                result = await Runner.run(summarizer_agent, text)
+                summary = getattr(result, 'final_output', 'Could not generate summary.')
+                logger.info("Internal summarizer agent finished.")
+                return summary
+            except Exception as e:
+                logger.error(f"Error in summarize_text tool: {e}", exc_info=True)
+                return "Failed to generate summary due to an internal error."
 
         custom_tools['summarize'] = summarize_text
 
         return custom_tools
 
-    def create_agent(self, instructions: str = None, tools: List[str] = None, model_name: str = "o3-mini") -> Agent:
+    def create_agent(self, instructions: str = None, tools: List[str] = None, model_name: str = None) -> Agent:
         """Create an agent with specified instructions and tools.
 
         Args:
@@ -69,6 +89,9 @@ class AgentsQCore:
                 "Use the appropriate tools based on the user's request. "
                 "Always provide clear explanations of your actions and findings."
             )
+        
+        # Get default model from config if not provided
+        effective_model_name = model_name if model_name else current_app.config.get('DEFAULT_MODEL_NAME', 'gpt-4o')
 
         # Select tools based on provided list or use all available tools
         selected_tools = []
@@ -82,16 +105,16 @@ class AgentsQCore:
             selected_tools = list(self.available_tools.values())
 
         # Conditionally remove incompatible tools based on model
-        if model_name == "o3-mini":
+        if effective_model_name == "o3-mini":
             original_tool_count = len(selected_tools)
             selected_tools = [tool for tool in selected_tools if not isinstance(tool, WebSearchTool)]
             if len(selected_tools) < original_tool_count:
-                logger.warning(f"Removed WebSearchTool as it is incompatible with model '{model_name}'.")
+                logger.warning(f"Removed WebSearchTool as it is incompatible with model '{effective_model_name}'.")
 
         # Create model settings
         model_settings = ModelSettings(
             # Pass model_name to the configuration method
-            **self.responses_api.configure_model_settings(model_name=model_name)
+            **self.responses_api.configure_model_settings(model_name=effective_model_name)
         )
 
         # Create and return the agent using the model name string directly
@@ -103,11 +126,11 @@ class AgentsQCore:
                 name="Agents_Q Assistant",
                 instructions=instructions,
                 tools=selected_tools,
-                model=model_name, # Pass model name string directly
+                model=effective_model_name, # Pass effective model name string directly
                 model_settings=model_settings
             )
 
-            logger.info(f"Created agent with model: {model_name} and {len(selected_tools)} tools")
+            logger.info(f"Created agent with model: {effective_model_name} and {len(selected_tools)} tools")
             return agent
 
         except Exception as e:
@@ -115,7 +138,7 @@ class AgentsQCore:
             logger.error(f"Error creating agent: {str(e)}")
             raise # Re-raise the exception
 
-    async def process_message(self, message: str, custom_instructions: str = None, tools: List[str] = None, model_name: str = "o3-mini") -> Dict[str, Any]:
+    async def process_message(self, message: str, custom_instructions: str = None, tools: List[str] = None, model_name: str = None) -> Dict[str, Any]:
         """Process a user message through an agent.
 
         Args:
@@ -128,11 +151,14 @@ class AgentsQCore:
             A dictionary containing the agent's response and metadata.
         """
         try:
+            # Get effective model name, defaulting to config
+            effective_model_name = model_name if model_name else current_app.config.get('DEFAULT_MODEL_NAME', 'gpt-4o')
+            
             # Create an agent with specified or default configuration
             agent = self.create_agent(
                 instructions=custom_instructions,
                 tools=tools,
-                model_name=model_name
+                model_name=effective_model_name # Pass the determined model name
             )
 
             # stream_handler = self.responses_api.handle_streaming_response() # Not used here

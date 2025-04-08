@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, request, jsonify
-from app.workflow import create_workflow_session
+from app.enhanced_workflow import create_workflow_session
 
 main_bp = Blueprint('main', __name__)
 

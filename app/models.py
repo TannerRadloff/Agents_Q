@@ -11,6 +11,7 @@ class PlanOutput(BaseModel):
 
 class WorkflowState(BaseModel):
     session_id: str
+    plan: Optional[PlanOutput] = None
     accepted_plan: bool = False
     current_step_index: int = 0
     total_steps: int = 0

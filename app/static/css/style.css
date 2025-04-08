@@ -391,12 +391,40 @@ button:disabled {
     background-color: var(--danger-color);
 }
 
-.hidden {
+/* Default state: hide all dynamic sections */
+.plan-display,
+.feedback-form,
+.plan-analysis,
+.workflow-progress,
+.workflow-result {
     display: none;
 }
 
+/* State-based display rules */
+.workflow-container[data-ui-state="PLAN_DISPLAYED"] .plan-display,
+.workflow-container[data-ui-state="AWAITING_FEEDBACK"] .plan-display,
+.workflow-container[data-ui-state="ANALYZING"] .plan-display {
+    display: block; /* Or flex/grid if needed */
+}
+
+.workflow-container[data-ui-state="AWAITING_FEEDBACK"] .feedback-form {
+    display: block;
+}
+
+.workflow-container[data-ui-state="ANALYZING"] .plan-analysis {
+    display: block;
+}
+
+.workflow-container[data-ui-state="EXECUTING"] .workflow-progress {
+    display: block;
+}
+
+.workflow-container[data-ui-state="COMPLETED"] .workflow-result {
+    display: block;
+}
+
 .tools-used {
-    font-size: 12px;
+    font-size: 0.9em;
     color: var(--secondary-color);
     margin-top: 5px;
     font-style: italic;

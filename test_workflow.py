@@ -25,7 +25,7 @@ logging.basicConfig(
 logger = logging.getLogger("test_workflow")
 
 # Configuration
-BASE_URL = "http://localhost:5000"
+BASE_URL = "http://localhost:5001"
 TEST_QUERY = "Research the latest advancements in renewable energy and create a summary report with the top 3 innovations."
 
 class WorkflowTester:
