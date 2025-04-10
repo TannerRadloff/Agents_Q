@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify, current_app
 import os
 from app.agents_core import AgentsQCore
-from app.enhanced_workflow import get_workflow_state
+from app.workflow_repository import get_workflow_state
 import asyncio
 import logging
 
@@ -54,10 +54,10 @@ def get_workflow(session_id):
     return jsonify({
         'session_id': workflow.session_id,
         'status': workflow.status,
-        'current_step': workflow.current_step_index,
-        'total_steps': workflow.total_steps,
-        'plan': workflow.plan.dict() if workflow.plan else None, # Include plan details
+        'plan': workflow.plan.dict() if workflow.plan else None, # Include plan details (new structure)
         'updates': workflow.updates,
-        'steps_results': workflow.steps_results, # Include step results
-        'final_result': workflow.final_result
+        'steps_results': workflow.steps_results, # Include step results (now Dict)
+        'step_statuses': workflow.step_statuses, # Include step statuses (new Dict)
+        'final_result': workflow.final_result,
+        'accepted_plan': workflow.accepted_plan # Added accepted status
     })

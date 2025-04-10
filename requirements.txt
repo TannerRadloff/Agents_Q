@@ -1,0 +1,5 @@
+Flask-SocketIO
+Flask-SQLAlchemy
+python-dotenv
+openai-agents
+flask 

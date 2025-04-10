@@ -57,16 +57,24 @@
             
             <div id="workflow-progress" class="workflow-progress hidden">
                 <h2>Workflow Execution</h2>
-                <div class="progress-bar-container">
-                    <div id="progress-bar" class="progress-bar"></div>
+                <div id="workflow-status-display" class="overall-status">Overall Status: Pending</div>
+                <div id="progress-updates" class="progress-updates">
+                    <h4>Log:</h4>
                 </div>
-                <div id="current-step" class="current-step"></div>
-                <div id="progress-updates" class="progress-updates"></div>
             </div>
             
-            <div id="workflow-result" class="workflow-result hidden">
-                <h2>Workflow Result</h2>
-                <div id="result-content" class="result-content"></div>
+            <div id="workflow-result" class="result-container" style="display: none;">
+                <h3>Final Result</h3>
+                <pre id="result-content"></pre>
+            </div>
+
+            <!-- Artifacts Display Area -->
+            <div id="artifacts-display" class="artifacts-container" style="display: none;">
+                <h3>Generated Files / Artifacts</h3>
+                <div id="artifacts-actions" style="margin-bottom: 15px;">
+                    <button id="scan-artifacts-btn" class="secondary-btn">Scan for Artifacts</button>
+                </div>
+                <!-- Artifacts will be added here dynamically -->
             </div>
         </div>
         
@@ -76,6 +84,7 @@
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="{{ url_for('static', filename='js/workflow.js') }}"></script>
 </body>
 </html>

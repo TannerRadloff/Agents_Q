@@ -47,25 +47,36 @@ document.addEventListener('DOMContentLoaded', function() {
     function setUIState(newState) {
         workflowContainer.dataset.uiState = newState;
         console.log(`UI State changed to: ${newState}`);
-        
-        // Update status text based on state
+
+        const workflowResultDiv = document.getElementById('workflow-result');
+        const artifactsDisplayDiv = document.getElementById('artifacts-display');
+        const workflowProgressDiv = document.getElementById('workflow-progress'); // Get progress div
+
+        // Hide progress by default, show in specific states
+        if (workflowProgressDiv) workflowProgressDiv.style.display = 'none';
+
         switch (newState) {
             case UI_STATES.INITIAL:
                 setStatus('ready', 'Ready');
+                if(workflowResultDiv) workflowResultDiv.style.display = 'none';
+                if(artifactsDisplayDiv) artifactsDisplayDiv.style.display = 'none';
                 break;
             case UI_STATES.CREATING_PLAN:
                 setStatus('thinking', 'Creating plan...');
+                if(workflowResultDiv) workflowResultDiv.style.display = 'none';
+                if(artifactsDisplayDiv) artifactsDisplayDiv.style.display = 'none';
                 break;
             case UI_STATES.PLAN_DISPLAYED:
                 setStatus('ready', 'Plan created');
+                if(workflowResultDiv) workflowResultDiv.style.display = 'none';
                 break;
-             case UI_STATES.AWAITING_FEEDBACK:
-                 setStatus('ready', 'Plan ready. Accept or provide feedback.');
-                 feedbackInput.value = ''; // Clear feedback input
-                 feedbackInput.disabled = false;
-                 submitFeedbackBtn.disabled = false;
-                 feedbackInput.focus();
-                 break;
+            case UI_STATES.AWAITING_FEEDBACK:
+                setStatus('ready', 'Plan ready. Accept or provide feedback.');
+                feedbackInput.value = ''; // Clear feedback input
+                feedbackInput.disabled = false;
+                submitFeedbackBtn.disabled = false;
+                feedbackInput.focus();
+                break;
             case UI_STATES.REFINING_PLAN:
                 setStatus('thinking', 'Refining plan...');
                 break;
@@ -73,17 +84,43 @@ document.addEventListener('DOMContentLoaded', function() {
                 setStatus('thinking', 'Analyzing plan...');
                 break;
             case UI_STATES.EXECUTING:
-                initializeWorkflowProgressView();
+                initializeWorkflowProgressView(); // Might make progress visible
+                if (workflowProgressDiv) workflowProgressDiv.style.display = 'block'; // Ensure progress is visible
                 setStatus('thinking', 'Executing plan...');
+                if(workflowResultDiv) workflowResultDiv.style.display = 'none';
                 break;
             case UI_STATES.COMPLETED:
                 setStatus('ready', 'Workflow completed');
+                // Let showWorkflowResult and file_artifact_update handler manage visibility
+                // No explicit show/hide here for result/artifact divs
+                // We might want to explicitly hide the progress view if it was shown
+                if (workflowProgressDiv) workflowProgressDiv.style.display = 'none';
+                
+                // ADDITIONAL FIX: Explicitly show artifact container in COMPLETED state
+                const artifactsDisplay = document.getElementById('artifacts-display');
+                if (artifactsDisplay) {
+                    console.log('COMPLETED state: Explicitly setting artifacts-display to visible');
+                    artifactsDisplay.style.display = 'block';
+                    
+                    // Automatically trigger the scan button after a short delay
+                    setTimeout(() => {
+                        console.log('Auto-triggering artifact scan after workflow completion');
+                        const scanButton = document.getElementById('scan-artifacts-btn');
+                        if (scanButton) {
+                            scanButton.click(); // Programmatically click the scan button
+                        }
+                    }, 500); // Short delay to ensure everything is ready
+                }
                 break;
             case UI_STATES.ERROR:
-                // Assuming status is already set by the error handler
+                setStatus('error', statusText.textContent || 'An error occurred'); // Keep last error message if possible
+                // Hide progress on error
+                if (workflowProgressDiv) workflowProgressDiv.style.display = 'none';
                 break;
             default:
                 setStatus('ready', 'Ready');
+                if(workflowResultDiv) workflowResultDiv.style.display = 'none';
+                if(artifactsDisplayDiv) artifactsDisplayDiv.style.display = 'none';
         }
     }
 
@@ -133,36 +170,168 @@ document.addEventListener('DOMContentLoaded', function() {
     socket.on('workflow_update', function(data) {
         console.log('Received workflow_update event:', data);
         if (data.session_id === sessionId) {
-            // Ensure we are in the executing state before trying to update progress
-            if (workflowContainer.dataset.uiState === UI_STATES.EXECUTING) {
-                console.log('Session ID matches. Calling addProgressUpdate():', data.message);
-                addProgressUpdate(data.message);
+            if (!progressUpdates) {
+                console.error('progressUpdates element not found');
             } else {
-                 console.warn('Received workflow_update while not in EXECUTING state.');
+                // Add an item for this update
+                const div = document.createElement('div');
+                div.textContent = data.message;
+                progressUpdates.appendChild(div);
+                
+                // Auto-scroll progress updates
+                progressUpdates.scrollTop = progressUpdates.scrollHeight;
             }
+
+            if (data.state && data.state.status) {
+                console.log('State update received:', data.state);
+                
+                // Update the overall status
+                const statusDisplay = document.getElementById('workflow-status-display'); 
+                if (statusDisplay) {
+                    statusDisplay.textContent = `Overall Status: ${data.state.status}`;
+                }
+                
+                // Update statuses of individual steps
+                if (data.state.step_statuses && window.stepStatusElements) {
+                    for (const [stepId, status] of Object.entries(data.state.step_statuses)) {
+                        const statusElement = window.stepStatusElements[stepId];
+                        if (statusElement) {
+                            // Remove all status classes first
+                            statusElement.classList.remove('status-pending', 'status-running', 'status-completed', 'status-failed', 'status-skipped');
+                            // Add the appropriate class
+                            statusElement.classList.add(`status-${status.toLowerCase()}`);
+                            statusElement.textContent = status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
+                        }
+                    }
+                }
+                
+                // If status is COMPLETED, show the result
+                if (data.state.status.toUpperCase() === 'COMPLETED' || data.state.status.toUpperCase() === 'FAILED') {
+                    // Show workflow result
+                    if (data.state.final_result) {
+                        showWorkflowResult(data.state.final_result);
+                        
+                        // Make sure to change UI state to COMPLETED
+                        setUIState(UI_STATES.COMPLETED);
+                        
+                        // Ensure artifacts container is visible
+                        const artifactsDisplay = document.getElementById('artifacts-display');
+                        if (artifactsDisplay) {
+                            console.log('Setting artifacts-display to visible on workflow completion');
+                            artifactsDisplay.style.display = 'block';
+                            
+                            // Automatically trigger the scan button after a short delay
+                            setTimeout(() => {
+                                console.log('Auto-triggering artifact scan after workflow completion');
+                                const scanButton = document.getElementById('scan-artifacts-btn');
+                                if (scanButton) {
+                                    scanButton.click(); // Programmatically click the scan button
+                                }
+                            }, 500); // Short delay to ensure everything is ready
+                        }
+                    }
+                }
+            }
+
         } else {
             console.warn('Received workflow_update event for wrong session ID:', data.session_id, 'Expected:', sessionId);
         }
     });
 
-    socket.on('workflow_completed', function(data) {
-        console.log('Received workflow_completed event:', data);
+    socket.on('file_artifact_update', function(data) {
+        console.log('Received file_artifact_update event:', data);
         if (data.session_id === sessionId) {
-            console.log('Session ID matches. Setting UI state to COMPLETED.');
-            showWorkflowResult(data.result);
-            setUIState(UI_STATES.COMPLETED);
+            const artifactsDisplay = document.getElementById('artifacts-display');
+            if (!artifactsDisplay) {
+                console.error('artifacts-display element not found in DOM');
+                return;
+            }
+
+            const filename = data.filename;
+            const fileContent = data.file_content;
+            console.log(`Processing artifact: ${filename} with ${fileContent.length} characters of content`);
+            
+            // Create a safe ID for the element
+            const artifactId = `artifact-${filename.replace(/[^a-zA-Z0-9_\-\.]/g, '-')}`;
+
+            let artifactItem = artifactsDisplay.querySelector(`#${artifactId}`);
+
+            if (artifactItem) {
+                // Update existing artifact
+                const preElement = artifactItem.querySelector('.artifact-content pre');
+                if (preElement) {
+                    preElement.textContent = fileContent;
+                    console.log(`Updated artifact content for: ${filename}`);
+                } else {
+                     console.error(`Could not find content element for existing artifact: ${filename}`);
+                }
+            } else {
+                // Create new artifact element
+                console.log(`Creating new artifact display for: ${filename}`);
+                artifactItem = document.createElement('div');
+                artifactItem.className = 'artifact-item';
+                artifactItem.id = artifactId;
+
+                const filenameHeader = document.createElement('div');
+                filenameHeader.className = 'artifact-filename';
+                filenameHeader.textContent = filename;
+
+                const contentDiv = document.createElement('div');
+                contentDiv.className = 'artifact-content';
+                const preElement = document.createElement('pre');
+                preElement.textContent = fileContent;
+                contentDiv.appendChild(preElement);
+
+                artifactItem.appendChild(filenameHeader);
+                artifactItem.appendChild(contentDiv);
+
+                artifactsDisplay.appendChild(artifactItem);
+                console.log(`Artifact element for ${filename} added to DOM`);
+            }
+
+            // Always explicitly make the artifacts container visible
+            artifactsDisplay.style.display = 'block';
+            console.log(`Set artifacts-display container to visible`);
+            
+            // Force layout refresh
+            setTimeout(() => {
+                console.log('Forcing layout refresh for artifacts display');
+                artifactsDisplay.style.display = 'none';
+                artifactsDisplay.offsetHeight; // Force reflow
+                artifactsDisplay.style.display = 'block';
+            }, 100);
         } else {
-            console.warn('Received workflow_completed event for wrong session ID:', data.session_id, 'Expected:', sessionId);
+            console.warn('Received file_artifact_update event for wrong session ID:', data.session_id, 'Expected:', sessionId);
+        }
+    });
+    
+    // Handle artifact_post_update event to ensure UI refresh
+    socket.on('artifact_post_update', function(data) {
+        console.log('Received artifact_post_update event:', data);
+        if (data.session_id === sessionId) {
+            // Get the artifacts container and ensure it's visible
+            const artifactsDisplay = document.getElementById('artifacts-display');
+            if (artifactsDisplay) {
+                console.log('Ensuring artifacts-display is visible after post-update');
+                artifactsDisplay.style.display = 'block';
+                
+                // If in COMPLETED state, make sure UI reflects this
+                if (workflowContainer.dataset.uiState === UI_STATES.COMPLETED) {
+                    console.log('In COMPLETED state, ensuring all relevant elements are visible');
+                    const workflowResultDiv = document.getElementById('workflow-result');
+                    if (workflowResultDiv) workflowResultDiv.style.display = 'block';
+                }
+            }
         }
     });
 
     socket.on('plan_analysis', function(data) {
         if (data.session_id === sessionId) {
+            // Analysis data is now a structured dictionary
             showPlanAnalysis(data.analysis);
-            // Assuming analysis stays visible until plan is accepted/recreated
-            // Status is set within showPlanAnalysis for now
             setStatus('ready', 'Plan analysis complete');
-            // We remain in the ANALYZING state visually via CSS
+            // Remain visually in ANALYZING state via CSS until user acts
+            setUIState(UI_STATES.ANALYZING);
         }
     });
 
@@ -172,6 +341,89 @@ document.addEventListener('DOMContentLoaded', function() {
         // setUIState(UI_STATES.ERROR);
         // Show error message somewhere more prominently?
         addProgressUpdate('Error: ' + data.message); // Add to progress log for now
+    });
+
+    socket.on('artifacts_check_complete', function(data) {
+        console.log('Artifacts check complete:', data);
+        if (data.session_id === sessionId) {
+            const artifactsDisplay = document.getElementById('artifacts-display');
+            if (artifactsDisplay) {
+                // Remove any loading messages
+                const loadingMessage = document.getElementById('artifact-loading-message');
+                if (loadingMessage) {
+                    loadingMessage.remove();
+                }
+                
+                // If no artifacts were found but the workflow completed, check if we can
+                // parse the file name from the final result and request it directly
+                if (data.artifact_count === 0 && workflowContainer.dataset.uiState === UI_STATES.COMPLETED) {
+                    console.log('No artifacts found but workflow completed. Checking final result for filenames.');
+                    
+                    // Get the final result text
+                    const resultContent = document.getElementById('result-content');
+                    if (resultContent && resultContent.textContent) {
+                        const finalResultText = resultContent.textContent;
+                        console.log('Checking final result text:', finalResultText.substring(0, 100));
+                        
+                        // Try to find filename in text
+                        const filePatterns = [
+                            /file:?\s+([a-zA-Z0-9_\-.]+\.[a-zA-Z0-9]+)/i,
+                            /in\s+the\s+file\s+([a-zA-Z0-9_\-.]+\.[a-zA-Z0-9]+)/i,
+                            /find\s+it\s+in\s+the\s+file\s+([a-zA-Z0-9_\-.]+\.[a-zA-Z0-9]+)/i,
+                            /access\s+it\s+in\s+the\s+file\s+([a-zA-Z0-9_\-.]+\.[a-zA-Z0-9]+)/i,
+                            /titled\s+"([a-zA-Z0-9_\-.]+\.[a-zA-Z0-9]+)"/i
+                        ];
+                        
+                        let filenameFound = false;
+                        for (const pattern of filePatterns) {
+                            const match = finalResultText.match(pattern);
+                            if (match && match[1]) {
+                                filenameFound = true;
+                                const filename = match[1];
+                                console.log('Found filename in result:', filename);
+                                
+                                // Show a message that we're searching for the file
+                                const loadingMessage = document.createElement('div');
+                                loadingMessage.className = 'artifact-item loading-message';
+                                loadingMessage.innerHTML = `<p>Searching for file: ${filename}...</p>`;
+                                artifactsDisplay.appendChild(loadingMessage);
+                                
+                                // Show the artifacts container
+                                artifactsDisplay.style.display = 'block';
+                                
+                                // We'll request the server to check for this file specifically
+                                socket.emit('request_specific_file', {
+                                    session_id: sessionId,
+                                    filename: filename
+                                });
+                                break;
+                            }
+                        }
+                        
+                        // If no filename was found in the text, show a message
+                        if (!filenameFound) {
+                            console.log('No filename found in result text');
+                            const noFilesMessage = document.createElement('div');
+                            noFilesMessage.className = 'artifact-item no-files-message';
+                            noFilesMessage.innerHTML = `<p>No artifact files were found for this workflow.</p>`;
+                            artifactsDisplay.appendChild(noFilesMessage);
+                            artifactsDisplay.style.display = 'block';
+                        }
+                    }
+                } else if (data.artifact_count === 0) {
+                    // Show "no artifacts" message if none were found
+                    if (artifactsDisplay.children.length <= 1) { // Only heading exists
+                        const noFilesMessage = document.createElement('div');
+                        noFilesMessage.className = 'artifact-item no-files-message';
+                        noFilesMessage.innerHTML = `<p>No artifact files were found for this workflow.</p>`;
+                        artifactsDisplay.appendChild(noFilesMessage);
+                    }
+                }
+                
+                // Always ensure the container is visible
+                artifactsDisplay.style.display = 'block';
+            }
+        }
     });
 
     // Form submission
@@ -244,36 +496,141 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // Scan for artifacts button
+    const scanArtifactsBtn = document.getElementById('scan-artifacts-btn');
+    if (scanArtifactsBtn) {
+        scanArtifactsBtn.addEventListener('click', function() {
+            console.log('Manually scanning for artifacts with session ID:', sessionId);
+            
+            // Clear any "no artifacts" messages
+            const artifactsDisplay = document.getElementById('artifacts-display');
+            if (artifactsDisplay) {
+                // Remove any no-files-message elements
+                const noFilesMessages = artifactsDisplay.querySelectorAll('.no-files-message');
+                noFilesMessages.forEach(el => el.remove());
+                
+                // Clear any existing artifact items to prevent duplicates
+                const existingArtifacts = artifactsDisplay.querySelectorAll('.artifact-item:not(.loading-message)');
+                existingArtifacts.forEach(el => el.remove());
+                
+                // Add a loading message
+                const loadingMessage = document.createElement('div');
+                loadingMessage.className = 'artifact-item loading-message';
+                loadingMessage.id = 'artifact-loading-message';
+                loadingMessage.innerHTML = `<p>Searching for artifacts from your current workflow...</p>`;
+                artifactsDisplay.appendChild(loadingMessage);
+                
+                // Show the artifacts container
+                artifactsDisplay.style.display = 'block';
+            }
+            
+            // Get the final result text to extract the specific filename
+            const resultContent = document.getElementById('result-content');
+            if (resultContent && resultContent.textContent) {
+                const finalResultText = resultContent.textContent;
+                
+                // Try to find filename in text using various patterns
+                const filePatterns = [
+                    /file:?\s+([a-zA-Z0-9_\-.]+\.[a-zA-Z0-9]+)/i,
+                    /in\s+the\s+file\s+([a-zA-Z0-9_\-.]+\.[a-zA-Z0-9]+)/i,
+                    /find\s+it\s+in\s+the\s+file\s+([a-zA-Z0-9_\-.]+\.[a-zA-Z0-9]+)/i,
+                    /access\s+it\s+in\s+the\s+file\s+([a-zA-Z0-9_\-.]+\.[a-zA-Z0-9]+)/i,
+                    /titled\s+"([a-zA-Z0-9_\-.]+\.[a-zA-Z0-9]+)"/i,
+                    /file\s+([a-zA-Z0-9_\-.]+\.[a-zA-Z0-9]+)/i,
+                    /titled\s+["']([^"']+)["']/i,  // Match names in quotes
+                    /poem\s+titled\s+["']([^"']+)["']/i,
+                    /\.txt/i  // If .txt extension is mentioned anywhere
+                ];
+                
+                let foundSpecificFile = false;
+                
+                // First try to find a specific filename in the result text
+                for (const pattern of filePatterns) {
+                    const match = finalResultText.match(pattern);
+                    if (match && match[1]) {
+                        foundSpecificFile = true;
+                        const filename = match[1];
+                        console.log('Found filename in result for manual scan:', filename);
+                        
+                        // Request only this specific file
+                        socket.emit('request_specific_file', {
+                            session_id: sessionId,
+                            filename: filename,
+                            current_session_only: true
+                        });
+                        break;
+                    }
+                }
+                
+                // If no specific filename was found, but we see mentions of files
+                if (!foundSpecificFile && finalResultText.includes('.txt')) {
+                    // Request the server to check for artifacts but only for this session
+                    socket.emit('check_artifacts', {
+                        session_id: sessionId,
+                        current_session_only: true
+                    });
+                } else if (!foundSpecificFile) {
+                    // Last resort - look for any artifacts related to this session
+                    socket.emit('check_artifacts', {
+                        session_id: sessionId,
+                        current_session_only: true
+                    });
+                }
+            } else {
+                // If no result text is available, request artifacts for the current session only
+                socket.emit('check_artifacts', {
+                    session_id: sessionId,
+                    current_session_only: true
+                });
+            }
+        });
+    }
+
     // Function to display the plan
     function displayPlan(plan) {
-        // Plan display visibility is now handled by CSS based on state
-        
-        // Display the summary
-        planSummary.textContent = plan.summary;
-        
-        // Display the steps
-        planSteps.innerHTML = '';
-        plan.steps.forEach((step, index) => {
-            const stepElement = document.createElement('div');
-            stepElement.className = 'plan-step';
-            stepElement.innerHTML = `
-                <div class="step-number">${index + 1}</div>
-                <div class="step-content">
-                    <h3>${step.title}</h3>
-                    <p>${step.description}</p>
-                </div>
-            `;
-            planSteps.appendChild(stepElement);
-        });
-        
-        // Enable the accept and revise buttons
-        acceptPlanBtn.disabled = false;
-        revisePlanBtn.disabled = false;
-        if (analyzePlanBtn) {
-            analyzePlanBtn.disabled = false;
+        if (!plan || !plan.tasks) {
+            console.error("Invalid plan data received", plan);
+            setStatus('error', 'Failed to display plan: Invalid data');
+            return;
         }
+
+        planSteps.innerHTML = ''; // Clear previous steps
+        window.stepStatusElements = {}; // Reset storage for status elements
+
+        plan.tasks.forEach((task, index) => {
+            const taskElement = document.createElement('li');
+            taskElement.className = 'step-item';
+            taskElement.dataset.stepId = task.id;
+
+            // Create status badge container
+            const statusBadge = document.createElement('span');
+            statusBadge.className = 'status-badge status-pending'; // Default status
+            statusBadge.textContent = 'Pending';
+            // Store a reference to this badge element for later updates (using task ID)
+            window.stepStatusElements[task.id] = statusBadge;
+
+            taskElement.innerHTML = `
+                <div class="step-header">
+                    <strong class="step-title">${task.title || 'Untitled Task'}</strong>
+                    <span class="step-agent-role">(Agent: ${task.agent_role || 'Default'})</span>
+                    <!-- Placeholder for status badge -->
+                </div>
+                <p class="step-description">${task.description || 'No description.'}</p>
+                <p class="step-dependencies">Dependencies: ${task.dependencies && task.dependencies.length > 0 ? task.dependencies.join(', ') : 'None'}</p>
+            `;
+            // Insert the status badge into the header
+            const stepHeader = taskElement.querySelector('.step-header');
+            if (stepHeader) {
+                stepHeader.appendChild(statusBadge);
+            }
+
+            planSteps.appendChild(taskElement);
+        });
+
+        planSummary.textContent = plan.summary || 'No summary provided.';
         
-        // Hide any previous analysis (now handled by CSS state)
+        // Plan display visibility is handled by CSS via setUIState
+        // Consider drawing dependency lines here if implementing visualization
     }
 
     // Function to initialize the workflow progress view
@@ -292,79 +649,69 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('initializeWorkflowProgressView() finished.');
     }
 
-    // Function to add a progress update
+    // Function to add a progress update message
     function addProgressUpdate(message) {
-        console.log('Inside addProgressUpdate() with message:', message);
+        console.log("Inside addProgressUpdate() with message:", message);
+        if (!progressUpdates) return; // Exit if the log element doesn't exist
 
-        // --- Add explicit check for element validity --- 
-        if (!progressUpdates || !document.body.contains(progressUpdates)) {
-             console.error('progressUpdates element not found or not in DOM when addProgressUpdate called!');
-             return;
-        }
-         if (!currentStep || !document.body.contains(currentStep)) {
-             console.error('currentStep element not found or not in DOM when addProgressUpdate called!');
-             return;
-        }
-        if (!progressBar || !document.body.contains(progressBar)) { // Also check progressBar
-             console.error('progressBar element not found or not in DOM when addProgressUpdate called!');
-             // Decide if we should return or just skip progress bar update
-             // For now, let's just log and continue if possible
-        }
-        // --- End check ---
-
-        // If the checks above passed, proceed with DOM manipulation
-        const updateElement = document.createElement('div');
-        updateElement.className = 'progress-update';
-        updateElement.textContent = message;
-        progressUpdates.appendChild(updateElement);
-        // --- Force reflow diagnostic ---
-        // updateElement.offsetHeight; // Reading offsetHeight can trigger reflow  << REVERTED
-        // --- End diagnostic ---
-        progressUpdates.scrollTop = progressUpdates.scrollHeight;
-        
-        // Update current step text
+        // Only update the 'current step' display if the message indicates a step is starting
         if (message.startsWith('Starting step')) {
-            currentStep.textContent = message;
-            // --- Force reflow diagnostic ---
-            // currentStep.offsetHeight; // Reading offsetHeight can trigger reflow << REVERTED
-            // --- End diagnostic ---
-            
-            // Extract step number and total steps
-            const match = message.match(/Starting step (\d+)\/(\d+)/);
-            if (match) {
-                const current = parseInt(match[1]);
-                const total = parseInt(match[2]);
-                progressBar.setAttribute('data-total', total);
-                const percentage = (current - 1) / total * 100;
-                progressBar.style.width = `${percentage}%`;
+            const currentStepElement = document.getElementById('current-step');
+            if (currentStepElement) {
+                // Extract step title if possible, otherwise use the whole message
+                const stepTitleMatch = message.match(/Starting step \'(.*?)\'/);
+                currentStepElement.textContent = stepTitleMatch ? stepTitleMatch[1] : message;
+            } else {
+                console.warn('currentStep element not found in DOM when updating for starting step');
             }
-        } else if (message.startsWith('Completed step')) {
-            const match = message.match(/Completed step (\d+)/);
-            if (match) {
-                const current = parseInt(match[1]);
-                const total = parseInt(progressBar.getAttribute('data-total') || '1');
-                const percentage = current / total * 100;
-                progressBar.style.width = `${percentage}%`;
-            }
-        } else if (message === 'Workflow completed successfully!') {
-            progressBar.style.width = '100%';
         }
+
+        // Always add the message to the log list
+        const updateItem = document.createElement('li');
+        updateItem.textContent = message;
+        progressUpdates.appendChild(updateItem);
+        
+        // Auto-scroll to the bottom
+        progressUpdates.scrollTop = progressUpdates.scrollHeight;
     }
 
-    // Function to show workflow result
-    function showWorkflowResult(result) {
-        console.log('Inside showWorkflowResult.');
-        // Visibility is handled by CSS based on state
-        resultContent.innerHTML = result.replace(/\n/g, '<br>');
+    // Function to display the final workflow result
+    function showWorkflowResult(resultText) {
+        if (!resultContent || !workflowResult) return;
+
+        if (resultText) {
+            // Use marked library to render potential Markdown
+            resultContent.innerHTML = marked.parse(resultText);
+            // workflowResult.style.display = 'block'; // REMOVED - CSS handles this based on state
+        } else {
+            resultContent.textContent = 'Workflow completed, but no final result was provided.';
+            // workflowResult.style.display = 'block'; // REMOVED - CSS handles this based on state
+        }
     }
 
     // Function to show plan analysis
     function showPlanAnalysis(analysis) {
-        // Visibility is handled by CSS based on state
-        if (analysisContent) {
-            analysisContent.innerHTML = analysis.replace(/\n/g, '<br>');
-            // Status update is now handled in setUIState or the event handler
+        // analysis is now an object like PlanAnalysisOutput
+        if (!analysisContent || !analysis) {
+            console.error("Cannot display analysis: element or data missing.");
+            return;
         }
+
+        let analysisHtml = `
+            <h4>Analysis Scores (1-10):</h4>
+            <ul>
+                <li>Completeness: ${analysis.completeness_score ?? 'N/A'}</li>
+                <li>Clarity: ${analysis.clarity_score ?? 'N/A'}</li>
+                <li>Actionability: ${analysis.actionability_score ?? 'N/A'}</li>
+                <li>Dependencies: ${analysis.dependency_score ?? 'N/A'}</li>
+                <li>Role Assignment: ${analysis.role_assignment_score ?? 'N/A'}</li>
+                <li>Feasibility: ${analysis.feasibility_score ?? 'N/A'}</li>
+                <li><strong>Overall: ${analysis.overall_score?.toFixed(1) ?? 'N/A'}</strong></li>
+            </ul>
+            <h4>Suggestions:</h4>
+            <p>${analysis.suggestions?.replace(/\n/g, '<br>') ?? 'No suggestions provided.'}</p>
+        `;
+        analysisContent.innerHTML = analysisHtml;
     }
 
     // Function to set status indicator and text separately

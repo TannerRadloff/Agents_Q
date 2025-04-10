@@ -41,3 +41,54 @@
     border-radius: 8px;
     white-space: pre-line;
 }
+
+/* Artifact Display Styles */
+.artifacts-container {
+    margin-top: 20px;
+    padding: 15px;
+    border: 1px solid #e0e0e0; /* Lighter border */
+    border-radius: 8px; /* Slightly larger radius */
+    background-color: #f7f9fc; /* Light background */
+}
+
+.artifacts-container h3 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    color: #333;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 5px;
+}
+
+.artifact-item {
+    margin-bottom: 15px;
+    padding: 12px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    background-color: #ffffff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.artifact-filename {
+    font-weight: bold;
+    margin-bottom: 8px;
+    color: #0056b3; /* Use a theme color maybe */
+    display: block; /* Ensure it takes full width */
+}
+
+.artifact-content {
+    max-height: 350px; /* Slightly increased height */
+    overflow-y: auto;
+    background-color: #f0f0f0; /* Light grey background for code/text */
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+.artifact-content pre {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    margin: 0;
+    font-family: Consolas, Monaco, 'Andale Mono', 'Ubuntu Mono', monospace; /* Monospace font */
+    font-size: 0.9em; /* Slightly smaller font */
+    color: #333;
+}
